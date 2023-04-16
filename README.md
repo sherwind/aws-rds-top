@@ -1,6 +1,8 @@
 # aws-rds-top
 A command line tool that retrieves AWS RDS Enhanced Monitoring statistics from CloudWatch and displays the information in a format similar to the Linux top command.
 
+**Status: Alpha**
+
 ## Features
 
 - Retrieves and displays RDS instance system, network, disk IO, and process statistics.
