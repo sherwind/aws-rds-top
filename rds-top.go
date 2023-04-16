@@ -211,7 +211,11 @@ func printProcessList(messageJSON string, sortByMem bool) {
 
 	for _, process := range processes {
 		var p Process
-		json.Unmarshal([]byte(process.Raw), &p)
+		err := json.Unmarshal([]byte(process.Raw), &p)
+		if err != nil {
+			fmt.Println("Error unmarshaling JSON:", err)
+			continue
+		}
 		processList = append(processList, p)
 	}
 
