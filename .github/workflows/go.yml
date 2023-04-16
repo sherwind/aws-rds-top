@@ -26,3 +26,16 @@ jobs:
 
     - name: Test
       run: go test -v ./...
+
+    - name: Install gosec
+      run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+    - name: Run gosec security scanner
+      run: gosec -fmt=json -out=results.json ./...
+      continue-on-error: true
+
+    - name: Upload gosec results
+      uses: actions/upload-artifact@v3
+      with:
+        name: gosec-results
+        path: results.json
