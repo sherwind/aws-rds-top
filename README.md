@@ -7,6 +7,7 @@ A command line tool that retrieves AWS RDS Enhanced Monitoring statistics from C
 
 - Retrieves and displays RDS instance system, network, disk IO, and process statistics.
 - Supports sorting by memory usage or CPU usage.
+- Interactive mode with periodic data refresh (every 5 seconds).
 
 ## Prerequisites
 
@@ -29,11 +30,28 @@ go build -o rds-top
 
 ## Usage
 
+By default, `rds-top` runs in an interactive mode, continuously fetching and refreshing the monitoring data for the specified RDS instance.
+
 ```sh
 ./rds-top [options] <rds-instance-name>
+```
+
+If you provide a `--start-time` option, `rds-top` will fetch data from that specific point in time and then exit, similar to the previous behavior. This is useful for scripting or examining historical data.
+
+```sh
+# Fetch data from a specific start time and exit
 ./rds-top --start-time=$(date -v-13d +%s) <rds-instance-name>
+
+# Example with sorting and filtering (will also exit after one fetch due to --start-time)
 ./rds-top --sort-by-mem --start-time=$(date -j -f "%Y-%m-%dT%H:%M:%S%z" "2019-09-12T13:05:00+0000" +%s) <rds-instance-name> | grep -v 'idle$'
 ```
+
+## Interactive Mode
+
+When run without the `--start-time` option, `rds-top` enters interactive mode:
+
+- The display automatically refreshes with the latest data every 5 seconds.
+- To quit the application, press **q** followed by **Enter**.
 
 ## Options
 

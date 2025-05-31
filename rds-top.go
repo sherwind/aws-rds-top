@@ -65,29 +65,89 @@ func main() {
 	rdsSvc := rds.New(sess)
 	cloudWatchLogsSvc := cloudwatchlogs.New(sess)
 
-	resourceID, err := getResourceID(options.instanceID, rdsSvc)
-	if err != nil {
-		fmt.Println("Error getting resource ID:", err)
-		os.Exit(1)
+	// Channel to signal exit
+	quitChan := make(chan os.Signal, 1)
+	go func() {
+		// Read from stdin
+		var input []byte = make([]byte, 1)
+		for {
+			_, err := os.Stdin.Read(input)
+			if err != nil {
+				// Handle error (e.g., log it)
+				// Consider adding a small delay here to prevent busy-looping on error
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			if string(input) == "q" {
+				quitChan <- os.Interrupt // Send interrupt signal
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-quitChan:
+			// Attempt to restore terminal state before exiting
+			// This is a common practice for terminal applications
+			// but might require platform-specific code or libraries
+			// for a more robust solution.
+			exec.Command("stty", "-cbreak", "echo").Run()
+			fmt.Println("\nExiting...")
+			return
+		default:
+			// Attempt to set terminal to raw mode (or cbreak mode)
+			// to read single characters without needing to press Enter.
+			// This is a common approach but can be complex due to
+			// platform differences and terminal handling.
+			// For simplicity, this example might not fully implement it
+			// or might rely on basic stdin reading.
+			// A more robust solution uses libraries like termbox-go or tcell.
+			// exec.Command("stty", "cbreak", "-echo").Run() // Example, might need refinement
+
+			clearScreen()
+
+			resourceID, err := getResourceID(options.instanceID, rdsSvc)
+			if err != nil {
+				fmt.Println("Error getting resource ID:", err)
+				// Decide if you want to exit or retry after a delay
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			params := buildLogsParameters(resourceID, options.startTime)
+			// For continuous refresh, ensure startTime is not fixed after the first fetch,
+			// or adjust how startTime is used if you want to see a moving window.
+			// The current buildLogsParameters might need adjustment if startTime is meant
+			// to be "latest" rather than a fixed point from the program start.
+			// For now, assuming options.startTime is either 0 (latest) or a fixed historical point.
+
+			messageJSON, err := getLogEvents(params, cloudWatchLogsSvc)
+			if err != nil {
+				fmt.Println("Error getting log events:", err)
+				// Decide if you want to exit or retry after a delay
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			if messageJSON == "" {
+				fmt.Println("No new log events found. Waiting...")
+				time.Sleep(5 * time.Second)
+				continue
+			}
+
+			printSystemStats(messageJSON)
+			fmt.Println()
+
+			printNetworkStats(messageJSON)
+			printDiskIOStats(messageJSON)
+
+			fmt.Println()
+			printProcessList(messageJSON, options.sortByMem)
+
+			time.Sleep(5 * time.Second)
+		}
 	}
-
-	params := buildLogsParameters(resourceID, options.startTime)
-
-	messageJSON, err := getLogEvents(params, cloudWatchLogsSvc)
-	if err != nil {
-		fmt.Println("Error getting log events:", err)
-		os.Exit(1)
-	}
-
-	printSystemStats(messageJSON)
-	fmt.Println()
-
-	printNetworkStats(messageJSON)
-	printDiskIOStats(messageJSON)
-
-	fmt.Println()
-	printProcessList(messageJSON, options.sortByMem)
-
 }
 
 func clearScreen() {
@@ -105,24 +165,34 @@ func clearScreen() {
 }
 
 func parseFlags() (RDSTopOptions, error) {
+	options := RDSTopOptions{} // Initialize options
+
 	startTimeFlag := flag.String("start-time", "", "Optional: Specify the start time in seconds since the Unix epoch")
 	sortByMemFlag := flag.Bool("sort-by-mem", false, "Optional: Sorts output by memory. Default is to sort by CPU")
 
 	flag.Parse()
 
 	if flag.NArg() != 1 {
+		usage() // Call usage here as in original logic
 		return RDSTopOptions{}, errors.New("invalid number of arguments")
 	}
-	instanceID := flag.Arg(0)
+
+	// Populate fields in the options struct
+	options.instanceID = flag.Arg(0)
+	options.sortByMem = *sortByMemFlag // Dereference once we know sortByMemFlag is valid
+
+	// Handle startTime
 	if *startTimeFlag != "" {
 		startTime, err := strconv.ParseInt(*startTimeFlag, 10, 64)
 		if err != nil {
-			return RDSTopOptions{}, errors.New("invalid start time format")
+			// options already has instanceID and sortByMem. startTime remains 0 (its zero value).
+			return options, errors.New("invalid start time format")
 		}
-		return RDSTopOptions{startTime: startTime, sortByMem: *sortByMemFlag, instanceID: instanceID}, nil
+		options.startTime = startTime // Set startTime only if parsing succeeds.
 	}
+	// If *startTimeFlag was empty or successfully parsed, options.startTime is correctly set (or remains 0).
 
-	return RDSTopOptions{startTime: 0, sortByMem: *sortByMemFlag, instanceID: instanceID}, nil
+	return options, nil
 }
 
 func usage() {
