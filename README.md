@@ -51,7 +51,7 @@ If you provide a `--start-time` option, `rds-top` will fetch data from that spec
 When run without the `--start-time` option, `rds-top` enters interactive mode:
 
 - The display automatically refreshes with the latest data every 5 seconds.
-- To quit the application, press **q** followed by **Enter**.
+- To quit the application, press **q** followed by **Enter**, or press **Ctrl+D**.
 
 ## Options
 

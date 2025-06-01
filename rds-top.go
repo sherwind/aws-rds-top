@@ -11,10 +11,12 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
@@ -68,18 +70,27 @@ func main() {
 	// Channel to signal exit
 	quitChan := make(chan os.Signal, 1)
 	go func() {
-		// Read from stdin
-		var input []byte = make([]byte, 1)
+		reader := bufio.NewReader(os.Stdin)
 		for {
-			_, err := os.Stdin.Read(input)
+			text, err := reader.ReadString('\n')
 			if err != nil {
-				// Handle error (e.g., log it)
-				// Consider adding a small delay here to prevent busy-looping on error
-				time.Sleep(100 * time.Millisecond)
-				continue
+				// If error occurs (e.g. EOF), signal to quit.
+				// This handles Ctrl+D (EOF) as a way to exit.
+				// Other errors might also warrant a quit or specific handling.
+				// Adding a small log for unexpected errors might be useful for debugging,
+				// but avoid writing to stdout which would interfere with the UI.
+				// e.g., fmt.Fprintf(os.Stderr, "Input error: %v\n", err)
+				if err == io.EOF {
+					// Suppress "EOF" error message if it's just EOF
+				} else {
+					// Optionally log other errors to stderr if needed for debugging.
+					// For now, any read error will lead to attempting to quit.
+				}
+				quitChan <- os.Interrupt
+				return
 			}
-			if string(input) == "q" {
-				quitChan <- os.Interrupt // Send interrupt signal
+			if strings.TrimSpace(text) == "q" {
+				quitChan <- os.Interrupt
 				return
 			}
 		}
